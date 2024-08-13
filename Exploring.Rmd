@@ -5,95 +5,53 @@ output: html_notebook
 
 ```{r}
 library(tidyverse)
-library(baseballr)
+
+data <- read_csv("data/data_combined.csv")
 ```
-
 ```{r}
-fgData2013 <- fg_batter_leaders(startseason = 2013, endseason = 2013, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA)
-fgData2014 <- fg_batter_leaders(startseason = 2014, endseason = 2014, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2013$xMLBAMID, TRUE, FALSE))
-
-fgData2015 <- fg_batter_leaders(startseason = 2015, endseason = 2015, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2014$xMLBAMID, TRUE, FALSE))
-fgData2016 <- fg_batter_leaders(startseason = 2016, endseason = 2016, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2015$xMLBAMID, TRUE, FALSE))
-fgData2017 <- fg_batter_leaders(startseason = 2017, endseason = 2017, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2016$xMLBAMID, TRUE, FALSE))
-fgData2018 <- fg_batter_leaders(startseason = 2018, endseason = 2018, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2017$xMLBAMID, TRUE, FALSE))
-fgData2019 <- fg_batter_leaders(startseason = 2019, endseason = 2019, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2018$xMLBAMID, TRUE, FALSE))
-fgData2021 <- fg_batter_leaders(startseason = 2021, endseason = 2021, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2019$xMLBAMID, TRUE, FALSE))
-fgData2022 <- fg_batter_leaders(startseason = 2022, endseason = 2022, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2021$xMLBAMID, TRUE, FALSE))
-fgData2023 <- fg_batter_leaders(startseason = 2023, endseason = 2023, qual = 130) %>%
-  select(Season, xMLBAMID, PlayerName, Age, PA, wOBA) %>%
-  mutate(playedPrevious = if_else(xMLBAMID %in% fgData2022$xMLBAMID, TRUE, FALSE))
-
-fgFull <- rbind(fgData2015, fgData2016, fgData2017, fgData2018, fgData2019,
-                fgData2021, fgData2022, fgData2023)
-```
-
-```{r}
-scData2015 <- statcast_leaderboards(year=2015, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2016 <- statcast_leaderboards(year=2016, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2017 <- statcast_leaderboards(year=2017, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2018 <- statcast_leaderboards(year=2018, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2019 <- statcast_leaderboards(year=2019, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2021 <- statcast_leaderboards(year=2021, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2022 <- statcast_leaderboards(year=2022, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-scData2023 <- statcast_leaderboards(year=2023, min_pa = 100) %>%
-  select(year, `last_name, first_name`, player_id, max_hit_speed)
-
-scFull <- rbind(scData2015, scData2016, scData2017, scData2018, scData2019,
-                scData2021, scData2022, scData2023) %>%
-  rename(player_name = "last_name, first_name")
-```
-
-```{r}
-data <- inner_join(scFull, fgFull, by = join_by(player_id == xMLBAMID, year == Season)) %>%
-  select(year, player_id, player_name, Age, PA, max_hit_speed, wOBA, playedPrevious)
-```
-
-```{r}
-final <- data %>%
+data.rookieStats <- data %>%
   group_by(player_id) %>%
-  filter(PA >= 400) %>%
-  summarise(peak_wOBA = max(wOBA), across()) %>%
+  arrange(player_id, desc(wOBA)) %>%
+  summarise(
+    career_wOBA = sum(wOBA * pa) / sum(pa),
+    career_pa = sum(pa),
+    peak_wOBA = max(wOBA),
+    peak_wOBA_pa = first(pa),
+    across()
+  ) %>%
   group_by(player_id) %>%
-  filter(year == min(year), Age <= 28) %>%
-  mutate(max_ev_bucket = cut(max_hit_speed,
-                             breaks=c(0, 105, 107, 109, 111, 113, 115, 117, 130),
-                             labels=c("<105", "105-107", "107-109", "109-111",
-                                      "111-113", "113-115", "115-117", "117+")))
+  filter(year == min(year)) %>% # select rookie year
+  filter(age <= 28) %>% # remove age outliers
+  select(player_id, player_name, year, age, pa,
+         max_ev, avg_ev, ev50, brl_rate, wOBA,
+         career_wOBA, career_pa, peak_wOBA, peak_wOBA_pa)
 ```
+
+
 ```{r}
-final.forPlot <- final %>%
-  group_by(max_ev_bucket) %>%
-  summarise(n = n(),
-            mean_wOBA = mean(wOBA))
+ggplot(data = data.rookieStats %>% filter(peak_wOBA_pa >= 400,
+                                          career_pa >= 1000),
+       mapping = aes(x = max_ev, y = peak_wOBA)) +
+  geom_point()
 ```
 
 ```{r}
-ggplot(data = final, mapping = aes(x = max_ev_bucket, y = wOBA)) +
-  geom_boxplot() +
-  labs(y = "Peak wOBA", x = "Rookie Max EV")
+ggplot(data = data.rookieStats %>% filter(career_pa >= 650),
+       mapping = aes(x = max_ev, y = career_wOBA)) +
+  geom_point()
+```
+
+```{r}
+peak.mod <- lm(peak_wOBA ~ max_ev,
+               data = data.rookieStats %>% filter(peak_wOBA_pa >= 400,
+                                          career_pa >= 1000))
+
+summary(peak.mod)
+```
+```{r}
+career.mod <- lm(career_wOBA ~ max_ev,
+               data = data.rookieStats %>% filter(career_pa >= 1000))
+
+summary(career.mod)
 ```
 
